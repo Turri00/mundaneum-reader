@@ -14,4 +14,10 @@ export default tseslint.config(
     files: ['public/sw.js'],
     languageOptions: { globals: globals.serviceworker },
   },
+  {
+    files: ['supabase/functions/**/*.ts'],
+    languageOptions: {
+      globals: { Deno: 'readonly' },
+    },
+  },
 );

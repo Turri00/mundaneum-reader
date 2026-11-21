@@ -1,6 +1,6 @@
 # Mundaneum Reader
 
-App web progressiva (PWA) per leggere EPUB e sincronizzare la lettura tramite Supabase. L’interfaccia è in italiano; in Phase 0 sono disponibili accesso email/password, link email secondario e libreria vuota. La registrazione non è prevista.
+App web progressiva (PWA) per leggere EPUB e sincronizzare la lettura tramite Supabase. L’interfaccia è in italiano; Phase 0 include accesso email/password e PWA, Phase 1a include l’elenco EPUB della sola categoria Società. La registrazione non è prevista.
 
 ## Requisiti
 
@@ -28,6 +28,10 @@ I file `.env.*` sono esclusi da Git (tranne l’esempio). Il browser contiene so
 
 La migration in `supabase/migrations/` crea `books`, `progress` e `highlights` con RLS e policy per `auth.uid()`. In Supabase SQL Editor, esegui la query in `supabase/tests/anonymous_rls.sql`: tutti e tre i conteggi devono essere zero per il ruolo anonimo.
 
+La funzione autonoma `supabase/functions/drive-proxy/index.ts` espone `GET /list`, `GET /list?folderId=...` e `GET /file?id=...`. La funzione verifica il JWT con `auth.getUser`, usa il service account Drive in sola lettura e limita l’accesso ai discendenti della cartella principale. Per il deploy dalla dashboard aggiungi i secrets `GOOGLE_SA_JSON` e `DRIVE_ROOT_FOLDER_ID` nelle impostazioni delle Edge Functions; `SUPABASE_URL` e `SUPABASE_ANON_KEY` sono forniti da Supabase. Quando incolli la funzione dalla dashboard, disattiva **Verify JWT**: l’autenticazione applicativa resta obbligatoria dentro il codice.
+
+Il client carica e aggiorna `books` tramite i moduli `src/data/`, rispettando RLS. La categoria di test è configurata in `src/config.ts`.
+
 Per il login magic link, aggiungi agli URL consentiti di Supabase l’URL locale e l’URL HTTPS GitHub Pages del repository. Su GitHub Pages, la home ha forma `https://<nome-utente>.github.io/<nome-repository>/`.
 
 ## Deploy GitHub Pages
@@ -38,4 +42,4 @@ In **Settings → Pages**, imposta la sorgente su **GitHub Actions**. Il primo d
 
 ## Fasi e test
 
-Il progetto segue `SPEC.md` una fase alla volta. La checklist Phase 0 e le verifiche su iPhone sono in `docs/testing.md`.
+Il progetto segue `SPEC.md` una fase alla volta. Le checklist Phase 0 e Phase 1a e le verifiche su iPhone sono in `docs/testing.md`.

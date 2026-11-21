@@ -33,6 +33,21 @@ input:focus-visible, button:focus-visible { outline: 3px solid #87b3bf; outline-
 .login-options .muted { margin: 0 0 4px; font-size: .9rem; }
 .text-button { min-height: 44px; padding: 0; color: var(--accent); background: transparent; text-align: left; text-decoration: underline; text-underline-offset: 3px; }
 .status { min-height: 1.5em; margin: 16px 0 0; color: var(--accent); line-height: 1.45; }
+.greeting { margin: 0 0 18px; }
+.library-card { padding: clamp(20px, 5vw, 36px); }
+.library-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.library-heading h2 { margin: 0; }
+.library-heading button { flex: 0 0 auto; }
+.category-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+.category-chip { display: inline-flex; align-items: center; min-height: 38px; padding: 0 14px; border: 1px solid #aebec0; border-radius: 99px; background: #edf2ef; color: #294d58; font-size: .9rem; font-weight: 650; }
+.book-list { display: grid; gap: 10px; margin: 8px 0 0; padding: 0; list-style: none; }
+.book-row { display: flex; align-items: center; gap: 14px; min-width: 0; padding: 14px 0; border-bottom: 1px solid #e8e1d5; }
+.book-cover { flex: 0 0 42px; height: 52px; display: grid; place-items: center; border-radius: 6px 9px 9px 6px; background: #315a67; color: white; font-size: .55rem; font-weight: 750; letter-spacing: .04em; box-shadow: inset 4px 0 #ffffff26; }
+.book-details { min-width: 0; flex: 1; }
+.book-details h3 { overflow-wrap: anywhere; margin: 0; color: var(--ink); font-family: Georgia, serif; font-size: 1.02rem; font-weight: 600; line-height: 1.35; }
+.book-details p { margin: 5px 0 0; color: var(--muted); font-size: .88rem; }
+.book-size { flex: 0 0 auto; color: var(--muted); font-size: .78rem; }
+.empty-books { padding: 20px 0 4px; color: var(--muted); line-height: 1.5; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
 .topbar h1 { font-size: clamp(2rem, 9vw, 3rem); }
 .secondary { color: var(--ink); background: transparent; border: 1px solid #c9c5bc; }

@@ -1,4 +1,22 @@
-# Phase 0: checklist di verifica
+# Checklist di verifica
+
+## Phase 1a: libreria EPUB e funzione Drive
+
+1. Dalla dashboard Supabase, chiama la funzione `drive-proxy` con `GET /list` senza header `Authorization`: deve restituire **401**.
+2. Accedi alla PWA con l’utente esistente e tocca **Aggiorna libreria**.
+3. Verifica che compaia solo la categoria **Società** e che la lista contenga soltanto file `.epub`.
+4. Tocca **Aggiorna libreria** una seconda volta. Non devono apparire duplicati; il conteggio deve restare stabile.
+5. In Supabase **Table Editor → books**, verifica che le righe abbiano categoria `Società`, nome file, `drive_file_id` e `user_id` dell’utente.
+6. Controlla che documenti e cartelle esterni alla cartella Drive configurata non vengano elencati o scaricati.
+
+## Verifica manuale Phase 1a su iPhone reale
+
+1. Apri la PWA installata e accedi con email e password.
+2. Tocca **Aggiorna libreria** e verifica che la categoria Società e i suoi EPUB siano leggibili sullo schermo senza overflow orizzontale.
+3. Ripeti l’aggiornamento e verifica che la lista non duplichi i libri.
+4. Esci e accedi nuovamente; i libri salvati devono ricomparire prima di un nuovo aggiornamento Drive.
+
+## Phase 0: checklist di verifica
 
 ## Verifiche automatiche
 

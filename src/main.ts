@@ -1,4 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
+import { LIBRARY_CATEGORIES } from './config';
+import { getBooks, upsertDriveBooks } from './data/books';
+import { listDriveEpubs, listDriveFolders } from './data/driveProxy';
 import { supabase, supabaseConfigured } from './data/supabase';
 import './style.css';
 
@@ -95,24 +98,96 @@ function showLogin(message = ''): void {
 
 function showLibrary(session: Session): void {
   const email = session.user.email ?? 'Utente';
+  const activeCategory = LIBRARY_CATEGORIES[0];
   app.innerHTML = `
     <main class="shell">
       <header class="topbar">
         <div><p class="eyebrow">La tua biblioteca</p><h1>Mundaneum</h1></div>
         <button class="secondary" id="sign-out" type="button">Esci</button>
       </header>
-      <section class="card empty-state" aria-labelledby="empty-title">
-        <div class="book-mark" aria-hidden="true">M</div>
-        <h2 id="empty-title">La biblioteca è pronta</h2>
-        <p class="muted">Ciao ${escapeHtml(email)}. I tuoi libri appariranno qui quando collegheremo Google Drive.</p>
-        <span class="badge">Nessun libro ancora</span>
+      <p class="muted greeting">Ciao ${escapeHtml(email)}.</p>
+      <section class="card library-card" aria-labelledby="library-title">
+        <div class="library-heading">
+          <div><p class="eyebrow">Libreria EPUB</p><h2 id="library-title">Categorie</h2></div>
+          <button id="refresh-library" type="button">Aggiorna libreria</button>
+        </div>
+        <nav class="category-list" aria-label="Categorie">
+          ${LIBRARY_CATEGORIES.map((category) => `<span class="category-chip" aria-current="true">${escapeHtml(category)}</span>`).join('')}
+        </nav>
+        <p id="library-status" class="status" role="status" aria-live="polite">Caricamento dei libri salvati…</p>
+        <ul id="book-list" class="book-list" aria-label="Libri EPUB"></ul>
       </section>
     </main>`;
+
+  const refreshButton = app.querySelector<HTMLButtonElement>('#refresh-library');
+  const status = app.querySelector<HTMLParagraphElement>('#library-status');
+  const bookList = app.querySelector<HTMLUListElement>('#book-list');
+
+  if (status && bookList) {
+    void loadSavedBooks(activeCategory, status, bookList);
+  }
+  refreshButton?.addEventListener('click', async () => {
+    if (!status || !bookList || !refreshButton) return;
+    refreshButton.disabled = true;
+    status.textContent = 'Aggiornamento della libreria in corso…';
+    try {
+      const folders = await listDriveFolders();
+      const targetFolder = folders.find((folder) => normalizeCategory(folder.name) === normalizeCategory(activeCategory));
+      if (!targetFolder) throw new Error(`La categoria “${activeCategory}” non è stata trovata in Google Drive.`);
+
+      const driveBooks = await listDriveEpubs(targetFolder.id);
+      await upsertDriveBooks(activeCategory, driveBooks);
+      await loadSavedBooks(activeCategory, status, bookList, `${driveBooks.length} EPUB sincronizzati.`);
+    } catch (error) {
+      status.textContent = getErrorMessage(error, 'Non è stato possibile aggiornare la libreria.');
+    } finally {
+      refreshButton.disabled = false;
+    }
+  });
 
   app.querySelector<HTMLButtonElement>('#sign-out')?.addEventListener('click', async () => {
     const { error } = await supabase?.auth.signOut() ?? { error: new Error('Supabase non configurato') };
     if (error) showLibraryError(error.message);
   });
+}
+
+async function loadSavedBooks(
+  category: string,
+  status: HTMLParagraphElement,
+  bookList: HTMLUListElement,
+  successMessage?: string,
+): Promise<void> {
+  try {
+    const books = await getBooks(category);
+    bookList.innerHTML = books.length > 0
+      ? books.map((book) => `
+          <li class="book-row">
+            <div class="book-cover" aria-hidden="true">EPUB</div>
+            <div class="book-details">
+              <h3>${escapeHtml(book.title || book.filename.replace(/\.epub$/iu, ''))}</h3>
+              ${book.author ? `<p>${escapeHtml(book.author)}</p>` : ''}
+            </div>
+            <span class="book-size">${formatFileSize(book.size_bytes)}</span>
+          </li>`).join('')
+      : '<li class="empty-books">Nessun EPUB in questa categoria. Tocca “Aggiorna libreria” per cercare i libri.</li>';
+    status.textContent = successMessage ?? `${books.length} ${books.length === 1 ? 'libro' : 'libri'} salvati.`;
+  } catch (error) {
+    status.textContent = getErrorMessage(error, 'Non è stato possibile caricare i libri salvati.');
+  }
+}
+
+function normalizeCategory(value: string): string {
+  return value.normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-z0-9]/giu, '').toLocaleLowerCase('it');
+}
+
+function formatFileSize(size: number | null): string {
+  if (size === null || !Number.isFinite(size)) return '';
+  if (size < 1_000_000) return `${Math.max(1, Math.round(size / 1000))} kB`;
+  return `${(size / 1_000_000).toLocaleString('it-IT', { maximumFractionDigits: 1 })} MB`;
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
 }
 
 function showLibraryError(message: string): void {
