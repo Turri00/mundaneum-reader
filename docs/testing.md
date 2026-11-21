@@ -1,5 +1,19 @@
 # Checklist di verifica
 
+## Phase 1b: lettore EPUB e progresso
+
+1. Dalla libreria, tocca un libro EPUB: si apre il lettore senza scaricare nuovamente un file già in cache.
+2. Usa i pulsanti **Indietro** e **Avanti**, poi prova lo swipe orizzontale in entrambe le direzioni.
+3. Apri **Indice** e salta a un capitolo.
+4. Riduci e aumenta il carattere; cambia tra **Chiaro**, **Seppia** e **Scuro**. Chiudi e riapri il libro: tema e dimensione devono restare salvati su quel dispositivo.
+5. Leggi alcune pagine, attendi almeno 2 secondi e manda l’app in background. In Supabase `progress` controlla che siano valorizzati CFI, percentuale, `device_id` e `updated_at`.
+6. Chiudi e riapri il libro sullo stesso dispositivo: deve riprendere senza prompt. La percentuale in libreria deve aggiornarsi.
+7. Su un secondo dispositivo, apri lo stesso libro: deve comparire **Continua da dove eri su un altro dispositivo?** con **Sì** e **No**. Prova **Sì** per riprendere il CFI remoto. Per verificare **No**, torna sul primo dispositivo, salva un’altra posizione e riapri il libro sul secondo: il prompt deve riapparire e **No** deve iniziare dall’inizio.
+8. Con il libro già scaricato e la libreria ancora aperta, disattiva la rete e riapri il libro: l’EPUB deve arrivare dalla cache IndexedDB. Il progresso non viene salvato offline; riattiva la rete per continuare la sincronizzazione.
+9. Prova il lettore in verticale e in orizzontale; controlli e contenuto non devono finire sotto le aree sicure dell’iPhone. Pizzica dentro il testo: la pagina non deve ingrandirsi.
+
+Il CFI e il progresso non sono salvati localmente. In modalità offline resta disponibile la copia EPUB già scaricata; il progresso cloud non viene messo in coda sul dispositivo.
+
 ## Phase 1a: libreria EPUB e funzione Drive
 
 1. Dalla dashboard Supabase, chiama la funzione `drive-proxy` con `GET /list` senza header `Authorization`: deve restituire **401**.

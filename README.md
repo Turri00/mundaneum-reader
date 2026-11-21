@@ -1,6 +1,6 @@
 # Mundaneum Reader
 
-App web progressiva (PWA) per leggere EPUB e sincronizzare la lettura tramite Supabase. L’interfaccia è in italiano; Phase 0 include accesso email/password e PWA, Phase 1a include l’elenco EPUB della sola categoria Società. La registrazione non è prevista.
+App web progressiva (PWA) per leggere EPUB e sincronizzare la lettura tramite Supabase. L’interfaccia è in italiano; Phase 0 include accesso email/password e PWA, Phase 1a l’elenco EPUB della sola categoria Società e Phase 1b il lettore EPUB con progresso cloud. La registrazione non è prevista.
 
 ## Requisiti
 
@@ -24,6 +24,8 @@ I file `.env.*` sono esclusi da Git (tranne l’esempio). Il browser contiene so
 - `npm run lint` controlla il codice con ESLint.
 - `npx supabase@latest db push --remote` applica le migration al progetto Supabase collegato; eseguilo solo dopo il collegamento esplicito al progetto corretto.
 
+Il lettore usa `epubjs` in flusso paginato a colonna singola. Le posizioni CFI e le percentuali sono salvate nella tabella `progress`; gli EPUB scaricati sono memorizzati in IndexedDB, mentre le preferenze di lettura (tema e dimensione carattere) sono salvate sul dispositivo.
+
 ## Supabase
 
 La migration in `supabase/migrations/` crea `books`, `progress` e `highlights` con RLS e policy per `auth.uid()`. In Supabase SQL Editor, esegui la query in `supabase/tests/anonymous_rls.sql`: tutti e tre i conteggi devono essere zero per il ruolo anonimo.
@@ -42,4 +44,4 @@ In **Settings → Pages**, imposta la sorgente su **GitHub Actions**. Il primo d
 
 ## Fasi e test
 
-Il progetto segue `SPEC.md` una fase alla volta. Le checklist Phase 0 e Phase 1a e le verifiche su iPhone sono in `docs/testing.md`.
+Il progetto segue `SPEC.md` una fase alla volta. Le checklist Phase 0, Phase 1a e Phase 1b e le verifiche su iPhone sono in `docs/testing.md`.

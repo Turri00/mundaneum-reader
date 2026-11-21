@@ -25,6 +25,15 @@ export async function getBooks(category: string): Promise<BookRow[]> {
   return (data ?? []) as BookRow[];
 }
 
+export async function updateBookMetadata(bookId: string, title: string, author: string | null): Promise<void> {
+  if (!supabase) throw new Error('La connessione a Supabase non è configurata.');
+  const { error } = await supabase
+    .from('books')
+    .update({ title, author, metadata_read: true })
+    .eq('id', bookId);
+  if (error) throw new Error('Non è stato possibile salvare i metadati del libro.');
+}
+
 export async function upsertDriveBooks(category: string, entries: DriveEntry[]): Promise<BookRow[]> {
   if (!supabase) throw new Error('La connessione a Supabase non è configurata.');
   if (entries.length === 0) return [];

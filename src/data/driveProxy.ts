@@ -29,13 +29,17 @@ async function requestDrive(route: string, parameters?: Record<string, string>):
   for (const [key, value] of Object.entries(parameters ?? {})) {
     url.searchParams.set(key, value);
   }
-  return await fetch(url, {
-    headers: {
-      apikey: publishableKey,
-      Authorization: `Bearer ${data.session.access_token}`,
-      Accept: route === 'file' ? 'application/epub+zip' : 'application/json',
-    },
-  });
+  try {
+    return await fetch(url, {
+      headers: {
+        apikey: publishableKey,
+        Authorization: `Bearer ${data.session.access_token}`,
+        Accept: route === 'file' ? 'application/epub+zip' : 'application/json',
+      },
+    });
+  } catch {
+    throw new Error('Connessione a Google Drive non disponibile.');
+  }
 }
 
 async function throwDriveError(response: Response): Promise<never> {

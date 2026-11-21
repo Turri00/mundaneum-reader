@@ -1,8 +1,11 @@
 import type { Session } from '@supabase/supabase-js';
 import { LIBRARY_CATEGORIES } from './config';
 import { getBooks, upsertDriveBooks } from './data/books';
+import type { BookRow } from './data/books';
 import { listDriveEpubs, listDriveFolders } from './data/driveProxy';
+import { getProgressForBooks } from './data/progress';
 import { supabase, supabaseConfigured } from './data/supabase';
+import { openBookReader } from './reader';
 import './style.css';
 
 function getAppRoot(): HTMLDivElement {
@@ -122,10 +125,20 @@ function showLibrary(session: Session): void {
   const refreshButton = app.querySelector<HTMLButtonElement>('#refresh-library');
   const status = app.querySelector<HTMLParagraphElement>('#library-status');
   const bookList = app.querySelector<HTMLUListElement>('#book-list');
+  const booksById = new Map<string, BookRow>();
 
   if (status && bookList) {
-    void loadSavedBooks(activeCategory, status, bookList);
+    void loadSavedBooks(activeCategory, status, bookList, undefined, booksById);
   }
+  bookList?.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const bookButton = target.closest<HTMLButtonElement>('[data-book-id]');
+    const bookId = bookButton?.dataset.bookId;
+    if (!bookId) return;
+    const selectedBook = booksById.get(bookId);
+    if (selectedBook) void openBookReader(app, selectedBook, () => showLibrary(session));
+  });
   refreshButton?.addEventListener('click', async () => {
     if (!status || !bookList || !refreshButton) return;
     refreshButton.disabled = true;
@@ -137,7 +150,7 @@ function showLibrary(session: Session): void {
 
       const driveBooks = await listDriveEpubs(targetFolder.id);
       await upsertDriveBooks(activeCategory, driveBooks);
-      await loadSavedBooks(activeCategory, status, bookList, `${driveBooks.length} EPUB sincronizzati.`);
+      await loadSavedBooks(activeCategory, status, bookList, `${driveBooks.length} EPUB sincronizzati.`, booksById);
     } catch (error) {
       status.textContent = getErrorMessage(error, 'Non è stato possibile aggiornare la libreria.');
     } finally {
@@ -156,21 +169,39 @@ async function loadSavedBooks(
   status: HTMLParagraphElement,
   bookList: HTMLUListElement,
   successMessage?: string,
+  booksById?: Map<string, BookRow>,
 ): Promise<void> {
   try {
     const books = await getBooks(category);
+    booksById?.clear();
+    for (const book of books) booksById?.set(book.id, book);
+    let progressByBook = new Map<string, number>();
+    let progressLoadFailed = false;
+    try {
+      const progressRows = await getProgressForBooks(books.map((book) => book.id));
+      progressByBook = new Map(progressRows.map((progress) => [progress.book_id, progress.percentage]));
+    } catch {
+      progressLoadFailed = true;
+      status.textContent = 'Progresso non disponibile; libri caricati dal cloud.';
+    }
     bookList.innerHTML = books.length > 0
       ? books.map((book) => `
-          <li class="book-row">
+          <li>
+            <button class="book-row" type="button" data-book-id="${escapeHtml(book.id)}" aria-label="Apri ${escapeHtml(book.title || book.filename)}">
             <div class="book-cover" aria-hidden="true">EPUB</div>
             <div class="book-details">
               <h3>${escapeHtml(book.title || book.filename.replace(/\.epub$/iu, ''))}</h3>
               ${book.author ? `<p>${escapeHtml(book.author)}</p>` : ''}
+              <span class="book-progress-label">${formatProgress(progressByBook.get(book.id) ?? 0)}</span>
+              <span class="book-progress-track" aria-hidden="true"><span style="width:${progressToPercent(progressByBook.get(book.id) ?? 0)}%"></span></span>
             </div>
             <span class="book-size">${formatFileSize(book.size_bytes)}</span>
+            </button>
           </li>`).join('')
       : '<li class="empty-books">Nessun EPUB in questa categoria. Tocca “Aggiorna libreria” per cercare i libri.</li>';
-    status.textContent = successMessage ?? `${books.length} ${books.length === 1 ? 'libro' : 'libri'} salvati.`;
+    if (!progressLoadFailed) {
+      status.textContent = successMessage ?? `${books.length} ${books.length === 1 ? 'libro' : 'libri'} salvati.`;
+    }
   } catch (error) {
     status.textContent = getErrorMessage(error, 'Non è stato possibile caricare i libri salvati.');
   }
@@ -184,6 +215,14 @@ function formatFileSize(size: number | null): string {
   if (size === null || !Number.isFinite(size)) return '';
   if (size < 1_000_000) return `${Math.max(1, Math.round(size / 1000))} kB`;
   return `${(size / 1_000_000).toLocaleString('it-IT', { maximumFractionDigits: 1 })} MB`;
+}
+
+function progressToPercent(percentage: number): number {
+  return Math.max(0, Math.min(100, Math.round(percentage * 100)));
+}
+
+function formatProgress(percentage: number): string {
+  return `${progressToPercent(percentage)}% letto`;
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
