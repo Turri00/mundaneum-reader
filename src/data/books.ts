@@ -27,16 +27,21 @@ export async function getBooks(category: string): Promise<BookRow[]> {
 
 export async function updateBookMetadata(bookId: string, title: string, author: string | null): Promise<void> {
   if (!supabase) throw new Error('La connessione a Supabase non è configurata.');
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('books')
     .update({ title, author, metadata_read: true })
-    .eq('id', bookId);
-  if (error) throw new Error('Non è stato possibile salvare i metadati del libro.');
+    .eq('id', bookId)
+    .select('id')
+    .maybeSingle();
+  if (error || !data) {
+    const code = error ? ` (${error.code})` : '';
+    throw new Error(`Non è stato possibile salvare i metadati del libro${code}.`);
+  }
 }
 
 export async function upsertDriveBooks(category: string, entries: DriveEntry[]): Promise<BookRow[]> {
   if (!supabase) throw new Error('La connessione a Supabase non è configurata.');
-  if (entries.length === 0) return [];
+  if (entries.length === 0) return getBooks(category);
 
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) throw new Error('La sessione è scaduta. Accedi di nuovo.');
@@ -44,32 +49,42 @@ export async function upsertDriveBooks(category: string, entries: DriveEntry[]):
   const driveFileIds = entries.map((entry) => entry.id);
   const { data: currentData, error: currentError } = await supabase
     .from('books')
-    .select('drive_file_id,title,author,metadata_read')
+    .select('drive_file_id')
     .eq('user_id', userData.user.id)
     .in('drive_file_id', driveFileIds);
   if (currentError) throw new Error('Non è stato possibile sincronizzare i libri.');
-  const existingBooks = (currentData ?? []) as Pick<BookRow, 'drive_file_id' | 'title' | 'author' | 'metadata_read'>[];
-  const existingByFileId = new Map(existingBooks.map((book) => [book.drive_file_id, book]));
+  const existingIds = new Set((currentData ?? []).map((book) => book.drive_file_id as string));
+  const existingEntries = entries.filter((entry) => existingIds.has(entry.id));
+  const newEntries = entries.filter((entry) => !existingIds.has(entry.id));
 
-  const values = entries.map((entry) => {
-    const existing = existingByFileId.get(entry.id);
-    const fallbackTitle = entry.name.replace(/\.epub$/iu, '');
-    return {
+  if (existingEntries.length > 0) {
+    for (const entry of existingEntries) {
+      const { data: updatedBook, error: updateError } = await supabase
+        .from('books')
+        .update({ category, filename: entry.name, size_bytes: entry.size })
+        .eq('user_id', userData.user.id)
+        .eq('drive_file_id', entry.id)
+        .select('drive_file_id')
+        .maybeSingle();
+      if (updateError || !updatedBook) {
+        throw new Error('Non è stato possibile aggiornare i libri sincronizzati: verifica le policy RLS.');
+      }
+    }
+  }
+
+  if (newEntries.length > 0) {
+    const values = newEntries.map((entry) => ({
       user_id: userData.user.id,
       drive_file_id: entry.id,
       category,
       filename: entry.name,
       size_bytes: entry.size,
-      title: existing?.metadata_read ? existing.title : fallbackTitle,
-      author: existing?.metadata_read ? existing.author : null,
-      metadata_read: existing?.metadata_read ?? false,
-    };
-  });
+    }));
+    const { error } = await supabase
+      .from('books')
+      .upsert(values, { onConflict: 'user_id,drive_file_id', ignoreDuplicates: true });
+    if (error) throw new Error('Non è stato possibile salvare i nuovi libri sincronizzati.');
+  }
 
-  const { data, error } = await supabase
-    .from('books')
-    .upsert(values, { onConflict: 'user_id,drive_file_id' })
-    .select('id,user_id,drive_file_id,category,title,author,filename,size_bytes,metadata_read,created_at');
-  if (error) throw new Error('Non è stato possibile salvare i libri sincronizzati.');
-  return (data ?? []) as BookRow[];
+  return getBooks(category);
 }

@@ -1,6 +1,6 @@
 # Mundaneum Reader
 
-App web progressiva (PWA) per leggere EPUB e sincronizzare la lettura tramite Supabase. L’interfaccia è in italiano; Phase 0 include accesso email/password e PWA, Phase 1a l’elenco EPUB della sola categoria Società e Phase 1b il lettore EPUB con progresso cloud. La registrazione non è prevista.
+App web progressiva (PWA) per leggere EPUB e sincronizzare la lettura tramite Supabase. L’interfaccia è in italiano; Phase 0 include accesso email/password e PWA, Phase 1a l’elenco EPUB della sola categoria Società, Phase 1b il lettore EPUB con progresso cloud e Phase 1c le correzioni di metadati e gesti d’uso su iPhone. La registrazione non è prevista.
 
 ## Requisiti
 
@@ -24,7 +24,7 @@ I file `.env.*` sono esclusi da Git (tranne l’esempio). Il browser contiene so
 - `npm run lint` controlla il codice con ESLint.
 - `npx supabase@latest db push --remote` applica le migration al progetto Supabase collegato; eseguilo solo dopo il collegamento esplicito al progetto corretto.
 
-Il lettore usa `epubjs` in flusso paginato a colonna singola. Le posizioni CFI e le percentuali sono salvate nella tabella `progress`; gli EPUB scaricati sono memorizzati in IndexedDB, mentre le preferenze di lettura (tema e dimensione carattere) sono salvate sul dispositivo.
+Il lettore usa `epubjs` in flusso paginato a colonna singola e a schermo intero. Le posizioni CFI e le percentuali sono salvate nella tabella `progress`; gli EPUB scaricati sono memorizzati in IndexedDB, mentre le preferenze di lettura (tema e dimensione carattere) sono salvate sul dispositivo. La sincronizzazione Drive aggiorna solo categoria, nome file e dimensione per i libri già presenti, lasciando intatti titolo, autore e `metadata_read`. Le correzioni e i test manuali della Phase 1c sono descritti in `docs/testing.md`.
 
 ## Supabase
 
@@ -44,4 +44,4 @@ In **Settings → Pages**, imposta la sorgente su **GitHub Actions**. Il primo d
 
 ## Fasi e test
 
-Il progetto segue `SPEC.md` una fase alla volta. Le checklist Phase 0, Phase 1a e Phase 1b e le verifiche su iPhone sono in `docs/testing.md`.
+Il progetto segue `SPEC.md` una fase alla volta. Le checklist Phase 0, Phase 1a, Phase 1b e Phase 1c con le verifiche su iPhone sono in `docs/testing.md`.

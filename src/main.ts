@@ -16,6 +16,16 @@ function getAppRoot(): HTMLDivElement {
 
 const app = getAppRoot();
 
+for (const eventName of ['gesturestart', 'gesturechange', 'gestureend']) {
+  document.addEventListener(eventName, (event) => event.preventDefault(), { passive: false });
+}
+document.addEventListener('touchstart', (event) => {
+  if (event.touches.length > 1) event.preventDefault();
+}, { passive: false });
+document.addEventListener('touchmove', (event) => {
+  if (event.touches.length > 1) event.preventDefault();
+}, { passive: false });
+
 function showConfigurationError(): void {
   app.innerHTML = `
     <main class="shell">
@@ -190,7 +200,7 @@ async function loadSavedBooks(
             <button class="book-row" type="button" data-book-id="${escapeHtml(book.id)}" aria-label="Apri ${escapeHtml(book.title || book.filename)}">
             <div class="book-cover" aria-hidden="true">EPUB</div>
             <div class="book-details">
-              <h3>${escapeHtml(book.title || book.filename.replace(/\.epub$/iu, ''))}</h3>
+              <h3>${escapeHtml(book.title?.trim() || book.filename.replace(/\.epub$/iu, ''))}</h3>
               ${book.author ? `<p>${escapeHtml(book.author)}</p>` : ''}
               <span class="book-progress-label">${formatProgress(progressByBook.get(book.id) ?? 0)}</span>
               <span class="book-progress-track" aria-hidden="true"><span style="width:${progressToPercent(progressByBook.get(book.id) ?? 0)}%"></span></span>

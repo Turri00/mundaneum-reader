@@ -55,15 +55,14 @@ export async function openBookReader(
   const status = app.querySelector<HTMLParagraphElement>('#reader-status');
   const progressLabel = app.querySelector<HTMLSpanElement>('#reader-progress');
   const closeButton = app.querySelector<HTMLButtonElement>('#reader-close');
-  const previousButton = app.querySelector<HTMLButtonElement>('#reader-previous');
-  const nextButton = app.querySelector<HTMLButtonElement>('#reader-next');
+  const readerShell = app.querySelector<HTMLElement>('.reader-shell');
   const fontDownButton = app.querySelector<HTMLButtonElement>('#font-down');
   const fontUpButton = app.querySelector<HTMLButtonElement>('#font-up');
   const fontSizeLabel = app.querySelector<HTMLSpanElement>('#font-size-label');
   const themeSelect = app.querySelector<HTMLSelectElement>('#reader-theme');
   const tableOfContents = app.querySelector<HTMLDivElement>('#reader-toc');
-  if (!stage || !title || !author || !status || !progressLabel || !closeButton || !previousButton ||
-      !nextButton || !fontDownButton || !fontUpButton || !fontSizeLabel || !themeSelect || !tableOfContents) {
+  if (!stage || !title || !author || !status || !progressLabel || !closeButton || !readerShell ||
+      !fontDownButton || !fontUpButton || !fontSizeLabel || !themeSelect || !tableOfContents) {
     return;
   }
 
@@ -82,6 +81,7 @@ export async function openBookReader(
 
   const setStatus = (message: string): void => {
     status.textContent = message;
+    readerShell.classList.toggle('reader-warning', Boolean(message && /(non è stato possibile|non salvati|non disponibile)/iu.test(message)));
   };
 
   const updateProgressDisplay = (cfi: string): number => {
@@ -171,15 +171,21 @@ export async function openBookReader(
 
   closeButton.addEventListener('click', () => void closeReader());
   const turnPage = (direction: 'previous' | 'next'): void => {
+    readerShell.classList.remove('turn-next', 'turn-previous');
+    void readerShell.offsetWidth;
+    readerShell.classList.add(direction === 'next' ? 'turn-next' : 'turn-previous');
     const operation = direction === 'previous' ? rendition?.prev() : rendition?.next();
     void operation?.catch(() => setStatus('Non è stato possibile cambiare pagina.'));
   };
-  previousButton.addEventListener('click', () => turnPage('previous'));
-  nextButton.addEventListener('click', () => turnPage('next'));
+  const toggleControls = (): void => {
+    readerShell.classList.toggle('controls-visible');
+  };
 
   const applyPreferences = (next: ReaderPreferences, reportLocation = true): void => {
     savedPreferences = next;
     saveReaderPreferences(next);
+    readerShell.dataset.theme = next.theme;
+    applyStatusBarTheme(next.theme);
     fontSizeLabel.textContent = `${next.fontSize}px`;
     if (rendition) {
       rendition.themes.select(next.theme);
@@ -202,6 +208,9 @@ export async function openBookReader(
       applyPreferences({ ...savedPreferences, theme });
     }
   });
+  applyStatusBarTheme(preferences.theme);
+  themeSelect.addEventListener('change', () => applyStatusBarTheme(savedPreferences.theme));
+  enableReaderGestures(readerShell, stage, () => turnPage('previous'), () => turnPage('next'), toggleControls);
 
   try {
     setStatus('Apro il libro…');
@@ -231,11 +240,11 @@ export async function openBookReader(
     const bookAuthor = metadata.creator?.trim() || null;
     title.textContent = bookTitle;
     author.textContent = bookAuthor ?? '';
-    if (!bookRow.metadata_read) {
+    if (!bookRow.metadata_read || !bookRow.title?.trim()) {
       try {
         await updateBookMetadata(bookRow.id, bookTitle, bookAuthor);
       } catch {
-        openingNotice = 'Il libro è aperto, ma i metadati non sono stati salvati sul cloud.';
+        openingNotice = 'Metadati non salvati nel cloud: controlla la connessione e i permessi Supabase.';
       }
     }
     if (closed) return;
@@ -257,7 +266,7 @@ export async function openBookReader(
     registerThemes(rendition);
     applyPreferences(savedPreferences, false);
     rendition.hooks.content.register((contents: Contents) => {
-      enableReaderGestures(contents, () => turnPage('previous'), () => turnPage('next'));
+      enableIframeGestures(contents, () => turnPage('previous'), () => turnPage('next'), toggleControls);
     });
     rendition.on('relocated', (location: EpubLocation) => {
       updateProgressDisplay(location.start.cfi);
@@ -307,7 +316,8 @@ export async function openBookReader(
       await rendition.display();
     }
     if (closed) return;
-    setStatus(remoteProgress && startCfi ? 'Progresso ripristinato dal cloud.' : openingNotice);
+    setStatus([openingNotice, remoteProgress && startCfi ? 'Progresso ripristinato dal cloud.' : '']
+      .filter(Boolean).join(' · '));
     window.requestAnimationFrame(() => rendition?.resize(stage.clientWidth, stage.clientHeight));
   } catch {
     if (!closed) {
@@ -318,18 +328,17 @@ export async function openBookReader(
 }
 
 function readerMarkup(book: BookRow, preferences: ReaderPreferences): string {
-  const fallbackTitle = book.title || book.filename.replace(/\.epub$/iu, '');
+  const fallbackTitle = book.title?.trim() || book.filename.replace(/\.epub$/iu, '');
   return `
-    <main class="reader-shell">
-      <header class="reader-header">
+    <main class="reader-shell" data-theme="${preferences.theme}">
+      <header class="reader-header reader-controls">
         <div class="reader-book-heading">
-          <p class="reader-kicker">Mundaneum Reader</p>
           <h1 id="reader-title">${escapeHtml(fallbackTitle)}</h1>
           <p id="reader-author" class="reader-author">${escapeHtml(book.author ?? '')}</p>
         </div>
-        <button id="reader-close" class="secondary reader-close" type="button">Libreria</button>
+        <button id="reader-close" class="reader-close" type="button" aria-label="Torna alla libreria">Chiudi</button>
       </header>
-      <div class="reader-toolbar">
+      <div class="reader-toolbar reader-controls">
         <details class="reader-toc">
           <summary>Indice</summary>
           <div id="reader-toc" class="reader-toc-list"><p>Caricamento dell’indice…</p></div>
@@ -355,9 +364,7 @@ function readerMarkup(book: BookRow, preferences: ReaderPreferences): string {
         <div id="epub-stage" class="epub-stage"></div>
       </section>
       <footer class="reader-footer">
-        <button id="reader-previous" type="button" aria-label="Pagina precedente">Indietro</button>
         <span id="reader-progress" class="reader-progress">0%</span>
-        <button id="reader-next" type="button" aria-label="Pagina successiva">Avanti</button>
       </footer>
     </main>`;
 }
@@ -424,35 +431,100 @@ async function askToResume(
   });
 }
 
-function enableReaderGestures(contents: Contents, previous: () => void, next: () => void): void {
+function enableIframeGestures(
+  contents: Contents,
+  previous: () => void,
+  next: () => void,
+  toggleControls: () => void,
+): void {
   const document = contents.document;
-  document.addEventListener('gesturestart', (event) => event.preventDefault(), { passive: false });
-  document.addEventListener('touchmove', (event) => {
+  const root = document.documentElement;
+  root.style.touchAction = 'pan-y';
+  document.body.style.touchAction = 'pan-y';
+  blockZoom(document);
+  wirePageGestures(document, previous, next, toggleControls);
+}
+
+function enableReaderGestures(
+  shell: HTMLElement,
+  stage: HTMLElement,
+  previous: () => void,
+  next: () => void,
+  toggleControls: () => void,
+): void {
+  shell.style.touchAction = 'pan-y';
+  stage.style.touchAction = 'pan-y';
+  blockZoom(document);
+  wirePageGestures(document, previous, next, toggleControls);
+}
+
+function blockZoom(target: Document): void {
+  for (const eventName of ['gesturestart', 'gesturechange', 'gestureend']) {
+    target.addEventListener(eventName, (event) => event.preventDefault(), { passive: false });
+    target.defaultView?.addEventListener(eventName, (event) => event.preventDefault(), { passive: false });
+  }
+  target.addEventListener('touchstart', (event) => {
     if (event.touches.length > 1) event.preventDefault();
   }, { passive: false });
+  target.addEventListener('touchmove', (event) => {
+    if (event.touches.length > 1) event.preventDefault();
+  }, { passive: false });
+}
 
-  let touchStart: { x: number; y: number; time: number } | null = null;
-  document.addEventListener('touchstart', (event) => {
+function wirePageGestures(
+  target: Document,
+  previous: () => void,
+  next: () => void,
+  toggleControls: () => void,
+): void {
+  let touchStart: { x: number; y: number; time: number; target: EventTarget | null } | null = null;
+  target.addEventListener('touchstart', (event) => {
     if (event.touches.length !== 1) {
       touchStart = null;
       return;
     }
     const touch = event.touches[0];
-    touchStart = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+    touchStart = { x: touch.clientX, y: touch.clientY, time: Date.now(), target: event.target };
   }, { passive: true });
-  document.addEventListener('touchend', (event) => {
+  target.addEventListener('touchend', (event) => {
     if (!touchStart || event.changedTouches.length !== 1) return;
     const touch = event.changedTouches[0];
     const deltaX = touch.clientX - touchStart.x;
     const deltaY = touch.clientY - touchStart.y;
     const elapsed = Date.now() - touchStart.time;
-    if (elapsed < 800 && Math.abs(deltaX) > 48 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25) {
-      event.preventDefault();
+    const distance = Math.abs(deltaX);
+    const moved = Math.hypot(deltaX, deltaY);
+    if (elapsed < 700 && distance > 56 && distance > Math.abs(deltaY) * 1.5) {
       if (deltaX > 0) previous();
       else next();
+      touchStart = null;
+      return;
+    }
+    if (elapsed < 350 && moved < 14 && !isControlTarget(touchStart.target)) {
+      const bounds = target.documentElement.getBoundingClientRect();
+      const x = touch.clientX;
+      if (x < bounds.width / 3) previous();
+      else if (x > bounds.width * 2 / 3) next();
+      else toggleControls();
     }
     touchStart = null;
-  }, { passive: false });
+  }, { passive: true });
+}
+
+function isControlTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && Boolean(target.closest('button, select, summary, a, input, textarea, .reader-controls'));
+}
+
+function applyStatusBarTheme(theme: ReaderTheme): void {
+  const themeColors: Record<ReaderTheme, string> = {
+    light: '#fffefa',
+    sepia: '#f4ecd8',
+    dark: '#202629',
+  };
+  const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (themeColor) themeColor.content = themeColors[theme];
+  const statusBar = document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-status-bar-style"]');
+  if (statusBar) statusBar.content = theme === 'dark' ? 'black-translucent' : 'default';
 }
 
 function escapeHtml(value: string): string {
